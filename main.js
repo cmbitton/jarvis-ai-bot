@@ -3,8 +3,11 @@ import { PythonShell } from "python-shell";
 import flatCache from "flat-cache";
 import express from "express";
 import bodyParser from "body-Parser";
-import * as dotenv from 'dotenv'
-dotenv.config()
+import * as dotenv from "dotenv";
+
+//loads env files
+dotenv.config();
+
 //server info
 const app = express();
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -32,8 +35,7 @@ const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 //welcome message when starting conversation with bot for first time
-const WELCOME_MESSAGE = 
-`Welcome to Jarvis, the ultimate AI personal assistant! Jarvis is currently capable of interacting with the following AI systems:
+const WELCOME_MESSAGE = `Welcome to Jarvis, the ultimate AI personal assistant! Jarvis is currently capable of interacting with the following AI systems:
 
 -ChatGPT
 -Stable Diffusion 
@@ -91,47 +93,58 @@ Jarvis also comes equipped with ChatGPT "Pre-Prompts". These Pre-Prompts are act
 /spongebob: ChatGPT will pretend to be Spongebob SquarePants
 /squidward: ChatGPT will pretend to be Squidward Tenticles
 /tonyhawk: ChatGPT will pretend to be Tony Hawk
-`
+`;
 
 // Listen for any kind of message. There are different kinds of
 // messages.
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   if (msg.text.toLowerCase().startsWith("dream")) {
-    let messageTime = Date.now();
-    let options = {
-      args: [`${msg.text.slice(6)}`, `${messageTime}`],
-    };
-    await PythonShell.run(
-      "stablediffusion.py",
-      options,
-      async (err, results) => {
-        console.log(results);
-      }
-    );
-    await sendPicture(chatId, msg.text.slice(6), messageTime);
-  } 
-  else if(msg.text.toLowerCase().startsWith("/start")){
-    bot.sendMessage(chatId, WELCOME_MESSAGE, {parse_mode: 'html'})
-  }
-  else {
+    const stableDiffusionClient = new StableDiffusionClient(chatId, msg);
+    await stableDiffusionClient.runStableDiffusion();
+    await stableDiffusionClient.sendPictureResults();
+  } else if (msg.text.toLowerCase().startsWith("/start")) {
+    bot.sendMessage(chatId, WELCOME_MESSAGE, { parse_mode: "html" });
+  } else {
     const ChatGPTClient = new ChatGPTTelegramClient(chatId, msg.text);
     await ChatGPTClient.runMainProgram();
   }
 });
 
-async function sendPicture(id, message, timecode) {
-  const numberOfPictures = 3;
-  const pictureArray = [];
-  for (let i = 1; i <= numberOfPictures; i++) {
-    const url = `${mainServer}/pics/${message.replace(
-      /\s+/g,
-      ""
-    )}${timecode}${i}.png`;
-    const pictureObject = { type: "photo", media: url }
-    pictureArray.push(pictureObject)
+class StableDiffusionClient {
+  constructor(senderid, message) {
+    this.senderid = senderid;
+    this.message = message.text.slice(6);
   }
-  bot.sendMediaGroup(id, pictureArray)
+
+  async runStableDiffusion() {
+    try {
+      this.messageTime = Date.now();
+      let options = {
+        args: [`${this.message}`, `${this.messageTime}`],
+      };
+      await PythonShell.run("stablediffusion.py", options);
+    } catch (err) {
+      console.log(err);
+    }
+  }
+
+  async sendPictureResults() {
+    try {
+      const numberOfPictures = 3;
+      const pictureArray = [];
+      for (let i = 1; i <= numberOfPictures; i++) {
+        const url = `${mainServer}/pics/${this.message.replace(/\s+/g, "")}${
+          this.messageTime
+        }${i}.png`;
+        const pictureObject = { type: "photo", media: url };
+        pictureArray.push(pictureObject);
+      }
+      bot.sendMediaGroup(this.senderid, pictureArray);
+    } catch (err) {
+      console.log(err);
+    }
+  }
 }
 
 class ChatGPTTelegramClient {
@@ -167,29 +180,28 @@ class ChatGPTTelegramClient {
   cycleAccountsForNewMessage() {
     let accounts = 4;
     if (totalChatGptMessages < accounts) {
-      return totalChatGptMessages
-    }
-    else {
-      return totalChatGptMessages % accounts
+      return totalChatGptMessages;
+    } else {
+      return totalChatGptMessages % accounts;
     }
   }
 
   setGptOptions() {
     if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
       this.accountIndex = this.cycleAccountsForNewMessage();
-      this.accountIndex ? this.accountIndex : this.accountIndex = 0
+      this.accountIndex ? this.accountIndex : (this.accountIndex = 0);
       totalChatGptMessages += 1;
       this.gptOpts = { args: [`${this.message}`, this.accountIndex] };
       //set options for continue conversation
     } else {
-      this.accountIndex = this.cache.getKey(`${this.senderid}`).accountIndex
-      this.accountIndex ? this.accountIndex : this.accountIndex = 0
+      this.accountIndex = this.cache.getKey(`${this.senderid}`).accountIndex;
+      this.accountIndex ? this.accountIndex : (this.accountIndex = 0);
       this.gptOpts = {
         args: [
           `${this.message}`,
           `${this.cache.getKey(`${this.senderid}`).conversationId}`,
           `${this.cache.getKey(`${this.senderid}`).messageId}`,
-          `${this.accountIndex}`
+          `${this.accountIndex}`,
         ],
       };
     }
@@ -219,7 +231,7 @@ class ChatGPTTelegramClient {
       id: this.senderid,
       conversationId: res[res.length - 2],
       messageId: res[res.length - 1],
-      accountIndex: this.accountIndex
+      accountIndex: this.accountIndex,
     });
     this.cache.save();
   }

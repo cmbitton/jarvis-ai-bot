@@ -4,6 +4,7 @@ import flatCache from "flat-cache";
 import express from "express";
 import bodyParser from "body-Parser";
 import * as dotenv from "dotenv";
+import { ChatGPTAPI } from 'chatgpt'
 
 //loads env files
 dotenv.config();
@@ -27,6 +28,11 @@ const mainServer = process.env.MAIN_SERVER;
 
 //messagecount for cycling accounts
 let totalChatGptMessages = 0;
+
+//Chatgpt api
+const api = new ChatGPTAPI({
+  apiKey: process.env.OPENAI_API_KEY
+})
 
 // replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.TELEGRAM_TOKEN;
@@ -106,7 +112,7 @@ bot.on("message", async (msg) => {
   } else if (msg.text.toLowerCase().startsWith("/start")) {
     bot.sendMessage(chatId, WELCOME_MESSAGE, { parse_mode: "html" });
   } else {
-    const ChatGPTClient = new ChatGPTTelegramClient(chatId, msg.text);
+    const ChatGPTClient = new ChatGPTOfficial(chatId, msg.text);
     await ChatGPTClient.runMainProgram();
   }
 });
@@ -147,92 +153,71 @@ class StableDiffusionClient {
   }
 }
 
-class ChatGPTTelegramClient {
+class ChatGPTOfficial {
   constructor(senderid, message) {
-    this.senderid = senderid;
-    this.message = message;
-    this.cache = flatCache.load(`${senderid}`);
-    this.gptOpts = {};
-  }
+  this.senderid = senderid;
+  this.message = message;
+  this.cache = flatCache.load(`${senderid}`);
+  this.gptOpts = {};
+}
 
-  async runMainProgram() {
-    if (this.resetMessageCache()) return;
-    this.setGptOptions();
-    const message = await this.runBot();
-    this.sendMessage(message);
-    this.saveCache(message);
-  }
+async runMainProgram() {
+  flatCache.clearCacheById(`${this.senderid}`)
+  if (this.resetMessageCache()) return;
+  this.setGptOptions();
+  const message = await this.runChatGPT(this.gptOpts);
+  console.log(message)
+  this.sendMessage(message);
+  this.saveCache(message);
+}
 
-  resetMessageCache() {
-    if (
-      this.message.toLowerCase().startsWith("chatgpt exit") ||
-      this.cache.keys().length === 0
-    ) {
-      flatCache.clearCacheById(`${this.senderid}`);
-      const cache = flatCache.load(`${this.senderid}`);
-      cache.setKey(`${this.senderid}`, { id: this.senderid });
-      cache.save();
-      bot.sendMessage(this.senderid, "exiting");
-      return true;
-    } else return false;
-  }
+resetMessageCache() {
+  if (
+    this.message.toLowerCase().startsWith("chatgpt exit") ||
+    this.cache.keys().length === 0
+  ) {
+    flatCache.clearCacheById(`${this.senderid}`);
+    const cache = flatCache.load(`${this.senderid}`);
+    cache.setKey(`${this.senderid}`, { id: this.senderid });
+    cache.save();
+    bot.sendMessage(this.senderid, "exiting");
+    return true;
+  } else return false;
+}
 
-  cycleAccountsForNewMessage() {
-    let accounts = 4;
-    if (totalChatGptMessages < accounts) {
-      return totalChatGptMessages;
-    } else {
-      return totalChatGptMessages % accounts;
-    }
+setGptOptions() {
+  if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
+    this.gptOpts = {args: [this.message]};
+    //set options for continue conversation
+  } else {
+    this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
   }
+}
 
-  setGptOptions() {
-    if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
-      this.accountIndex = this.cycleAccountsForNewMessage();
-      this.accountIndex ? this.accountIndex : (this.accountIndex = 0);
-      totalChatGptMessages += 1;
-      this.gptOpts = { args: [`${this.message}`, this.accountIndex] };
-      //set options for continue conversation
-    } else {
-      this.accountIndex = this.cache.getKey(`${this.senderid}`).accountIndex;
-      this.accountIndex ? this.accountIndex : (this.accountIndex = 0);
-      this.gptOpts = {
-        args: [
-          `${this.message}`,
-          `${this.cache.getKey(`${this.senderid}`).conversationId}`,
-          `${this.cache.getKey(`${this.senderid}`).messageId}`,
-          `${this.accountIndex}`,
-        ],
-      };
-    }
+async runChatGPT(opts) {
+  if(opts.args.length === 1){
+    const res = await api.sendMessage(this.message)
+    return res
   }
+  else{
+    const res = await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`})
+    return res
+  }
+}
 
-  async runBot() {
-    const res = await PythonShell.run(
-      "testchatgpt.py",
-      this.gptOpts,
-      async (results) => results
-    );
-    return res;
-  }
+sendMessage(res) {
+  bot.sendMessage(
+    this.senderid,
+    res.text
+  );
+}
 
-  sendMessage(res) {
-    bot.sendMessage(
-      this.senderid,
-      res
-        .slice(0, -2)
-        .map((sentence) => sentence + "\n")
-        .join(" ")
-    );
-  }
-
-  saveCache(res) {
-    this.cache.setKey(`${this.senderid}`, {
-      id: this.senderid,
-      conversationId: res[res.length - 2],
-      messageId: res[res.length - 1],
-      accountIndex: this.accountIndex,
-    });
-    this.cache.save();
-  }
+saveCache(res) {
+  console.log(res.id)
+  this.cache.setKey(`${this.senderid}`, {
+    id: this.senderid,
+    parentMessageId: res.id,
+  });
+  this.cache.save();
+}
 }

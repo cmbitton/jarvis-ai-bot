@@ -5,6 +5,7 @@ import express from "express";
 import bodyParser from "body-Parser";
 import * as dotenv from "dotenv";
 import { ChatGPTAPI } from 'chatgpt'
+import {prompts} from "./prompts.js";
 
 //loads env files
 dotenv.config();
@@ -41,66 +42,7 @@ const token = process.env.TELEGRAM_TOKEN;
 const bot = new TelegramBot(token, { polling: true });
 
 //welcome message when starting conversation with bot for first time
-const WELCOME_MESSAGE = `Welcome to Jarvis, the ultimate AI personal assistant! Jarvis is currently capable of interacting with the following AI systems:
-
--ChatGPT
--Stable Diffusion 
-
------------------------------------------
-
-<b><u>Stable Diffusion Instructions</u></b>
-
-Stable Diffusion is a text to image model, 
-capable of producing new high quality images from a text description.
-
-To use Stable Diffusion, simply start your message with the keyword "dream", followed by your text description. You will recieve 3 photos back based upon your description.
-
-<b>Stable Diffusion Example:</b> 
-"Dream a photograph of a beautiful sunrise over a tropical paradise"
-
------------------------------------------
-
-<b><u>ChatGPT Instructions</u></b>
-
-ChatGPT is a large language model chatbot, trained to understand natural language and generate human-like responses. ChatGPT is enabled by default, so any message sent to Jarvis that does not start with a keyword will be processed by ChatGPT. ChatGPT has the ability to remember what was said throughout a conversation. To end a conversation, you must reply "chatgpt exit". A new conversation will automatically be started the next time you use ChatGPT.
-
-Jarvis also comes equipped with ChatGPT "Pre-Prompts". These Pre-Prompts are activated by a keyword when starting a new conversation. The Pre-Prompts add character and personality to ChatGPT, and can help unlock various features and abilities.
-
-<b>ChatGPT Pre-Prompt Keywords (new conversations only):</b>
-
-/jailbreak: unlocks a uncensored, unbiased model of ChatGPT. Beware.
-/ceo: ChatGPT will act as the ceo of an imaginary company.
-/chef: ChatGPT will act as your personal chef and will recommend recipe options.
-/doctor: ChatGPT will act as an imaginary doctor, and will attempt to diagnose you.
-/essay: ChatGPT will write a college level essay on any topic you suggest. List the topic directly after the keyword.
-<b>example:</b> "/essay How the Industrial Revolution Impacted American Life."
-/financialadvisor: ChatGPT will act as your personal financial advisor.
-/interview: ChatGPT will interview for whatever position you suggest. List the topic directly after the keyword.
-<b>example:</b> "/interview Web Developer"
-/personaltrainer: ChatGPT will act as your personal trainer, and can help you create diet and exercise plans.
-/short story: ChatGPT will return a randomly generated short story.
-/techsupport: ChatGPT will help you solve problems with your computer, phone, or other devices.
-/textadventure: ChatGPT will take you on a text adventure, with outcomes dependent on your responses.
-/therapist: ChatGPT will act as a virtual therapist to talk you through problems with anxiety, depression, or other mental illness.
-
-<b>ChatGPT Celebrity/Character Pre-Prompt Keywords (new conversations only):</b>
-
-/alberteinstein: ChatGPT will pretend to be Albert Einstein
-/donaldtrump: ChatGPT will pretend to be Donald Trump
-/elonmusk: ChatGPT will pretend to be Elon Musk
-/hulkhogan: ChatGPT will pretend to be Hulk Hogan
-/jacksparrow: ChatGPT will pretend to be Jack Sparrow
-/joebiden: ChatGPT will pretend to be Joe Biden
-/johnnydepp: ChatGPT will pretend to be Johnny Depp
-/kimkardashian: ChatGPT will pretend to be Kim Kardashian
-/mortysmith: ChatGPT will pretend to be Morty Smith
-/ricksanchez: ChatGPT will pretend to be Rick Sanchez
-/snoopdogg: ChatGPT will pretend to be Snoop Dogg
-/spongebob: ChatGPT will pretend to be Spongebob SquarePants
-/squidward: ChatGPT will pretend to be Squidward Tenticles
-/tonyhawk: ChatGPT will pretend to be Tony Hawk
-`;
-
+const WELCOME_MESSAGE = prompts.instructions
 // Listen for any kind of message. There are different kinds of
 // messages.
 bot.on("message", async (msg) => {
@@ -185,9 +127,22 @@ resetMessageCache() {
   } else return false;
 }
 
+checkForPrePrompt(){
+  const prePrompts = Object.keys(prompts);
+  for (const key of prePrompts){
+    if (this.message.startsWith(key)){
+      return prompts[key]
+    }
+  }
+  return false
+}
 setGptOptions() {
   if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
     this.gptOpts = {args: [this.message]};
+    const prePrompt = this.checkForPrePrompt();
+    if(prePrompt){
+      this.gptOpts["prePrompt"] = prePrompt
+    }
     //set options for continue conversation
   } else {
     this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
@@ -196,12 +151,18 @@ setGptOptions() {
 
 async runChatGPT(opts) {
   if(opts.args.length === 1){
-    const res = await api.sendMessage(this.message)
-    return res
+    if(opts.prePrompt){
+    return await api.sendMessage(this.message, {systemMessage: opts.prePrompt})
+    }
+    return await api.sendMessage(this.message)
   }
   else{
-    const res = await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`})
-    return res
+    if(this.cache.getKey(`${this.senderid}`).prePrompt){
+      return await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`, systemMessage: this.cache.getKey(`${this.senderid}`).prePrompt})
+    }
+    else{
+      return await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`})
+    }
   }
 }
 
@@ -214,10 +175,26 @@ sendMessage(res) {
 
 saveCache(res) {
   console.log(res.id)
-  this.cache.setKey(`${this.senderid}`, {
-    id: this.senderid,
-    parentMessageId: res.id,
-  });
+  if(this.gptOpts.prePrompt){
+    this.cache.setKey(`${this.senderid}`, {
+      id: this.senderid,
+      parentMessageId: res.id,
+      prePrompt: this.gptOpts.prePrompt
+    });
+  }
+  else if(this.cache.getKey(`${this.senderid}`).prePrompt){
+    this.cache.setKey(`${this.senderid}`, {
+      id: this.senderid,
+      parentMessageId: res.id,
+      prePrompt: this.cache.getKey(`${this.senderid}`).prePrompt
+    });
+  }
+  else{
+    this.cache.setKey(`${this.senderid}`, {
+      id: this.senderid,
+      parentMessageId: res.id,
+    });
+  }
   this.cache.save();
 }
 }

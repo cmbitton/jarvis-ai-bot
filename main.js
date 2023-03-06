@@ -51,9 +51,11 @@ bot.on("message", async (msg) => {
     const stableDiffusionClient = new StableDiffusionClient(chatId, msg);
     await stableDiffusionClient.runStableDiffusion();
     await stableDiffusionClient.sendPictureResults();
-  } else if (msg.text.toLowerCase().startsWith("/start")) {
-    bot.sendMessage(chatId, WELCOME_MESSAGE, { parse_mode: "html" });
-  } else {
+  }
+  else if (msg.text.toLowerCase().startsWith("/help")) {
+  bot.sendMessage(chatId, WELCOME_MESSAGE, { parse_mode: "html" });
+  }
+  else {
     const ChatGPTClient = new ChatGPTOfficial(chatId, msg.text);
     await ChatGPTClient.runMainProgram();
   }
@@ -104,7 +106,7 @@ class ChatGPTOfficial {
 }
 
 async runMainProgram() {
-  flatCache.clearCacheById(`${this.senderid}`)
+  // flatCache.clearAll(); return
   if (this.resetMessageCache()) return;
   this.setGptOptions();
   const message = await this.runChatGPT(this.gptOpts);
@@ -116,13 +118,13 @@ async runMainProgram() {
 resetMessageCache() {
   if (
     this.message.toLowerCase().startsWith("chatgpt exit") ||
+    this.message.toLowerCase().startsWith("/start") ||
     this.cache.keys().length === 0
   ) {
     flatCache.clearCacheById(`${this.senderid}`);
-    const cache = flatCache.load(`${this.senderid}`);
-    cache.setKey(`${this.senderid}`, { id: this.senderid });
-    cache.save();
-    bot.sendMessage(this.senderid, "exiting");
+    this.cache.setKey(`${this.senderid}`, { id: this.senderid });
+    this.cache.save();
+    bot.sendMessage(this.senderid, 'Starting New Conversation...Please type your first message, or respond with "/help" to see a list of options');
     return true;
   } else return false;
 }

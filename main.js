@@ -4,9 +4,9 @@ import flatCache from "flat-cache";
 import express from "express";
 import bodyParser from "body-Parser";
 import * as dotenv from "dotenv";
-import { ChatGPTAPI } from 'chatgpt'
+import { ChatGPTClient } from "@waylaidwanderer/chatgpt-api"
 import {prompts} from "./prompts.js";
-
+ChatGPTClient.apply
 //loads env files
 dotenv.config();
 
@@ -133,6 +133,7 @@ checkForPrePrompt(){
   const prePrompts = Object.keys(prompts);
   for (const key of prePrompts){
     if (this.message.startsWith(key)){
+      this.message.replace(key, "")
       return prompts[key]
     }
   }
@@ -147,7 +148,7 @@ setGptOptions() {
     }
     //set options for continue conversation
   } else {
-    this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
+    this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).conversationId}`, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
   }
 }
 

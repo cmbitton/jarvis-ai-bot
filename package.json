@@ -13,6 +13,7 @@
     "@types/node-telegram-bot-api": "^0.57.6"
   },
   "dependencies": {
+    "@waylaidwanderer/chatgpt-api": "^1.28.2",
     "chatgpt": "^5.0.4",
     "dotenv": "^16.0.3",
     "flat-cache": "^3.0.4",

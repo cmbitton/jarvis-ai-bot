@@ -6,7 +6,16 @@ import bodyParser from "body-Parser";
 import * as dotenv from "dotenv";
 import { ChatGPTClient } from "@waylaidwanderer/chatgpt-api"
 import {prompts} from "./prompts.js";
-ChatGPTClient.apply
+import { KeyvFile } from "keyv-file"
+
+
+const cacheOptions = {
+  // Options for the Keyv cache, see https://www.npmjs.com/package/keyv
+  // This is used for storing conversations, and supports additional drivers (conversations are stored in memory by default)
+  // For example, to use a JSON file (`npm i keyv-file`) as a database:
+  store: new KeyvFile({ filename: 'cache.json' }),
+};
+
 //loads env files
 dotenv.config();
 
@@ -26,14 +35,6 @@ app.use(express.static("public"));
 
 //ngrok info
 const mainServer = process.env.MAIN_SERVER;
-
-//messagecount for cycling accounts
-let totalChatGptMessages = 0;
-
-//Chatgpt api
-const api = new ChatGPTAPI({
-  apiKey: process.env.OPENAI_API_KEY
-})
 
 // replace the value below with the Telegram token you receive from @BotFather
 const token = process.env.TELEGRAM_TOKEN;
@@ -134,7 +135,7 @@ checkForPrePrompt(){
   for (const key of prePrompts){
     if (this.message.startsWith(key)){
       this.message.replace(key, "")
-      return prompts[key]
+      return {key: key.slice(1), prompt: prompts[key]}
     }
   }
   return false
@@ -143,37 +144,35 @@ checkForPrePrompt(){
 setGptOptions() {
   if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
     this.gptOpts = {args: [this.message]};
-    const prePrompt = this.checkForPrePrompt();
-    if(prePrompt){
-      this.gptOpts["prePrompt"] = prePrompt
-    }
     //set options for continue conversation
   } else {
     this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).conversationId}`, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
+  }
+  const prePrompt = (this.checkForPrePrompt() || this.cache.getKey(`${this.senderid}`).prePrompt);
+  if(prePrompt){
+    this.gptOpts["prePrompt"] = prePrompt.prompt;
+    this.gptOpts["gptLabel"] = prePrompt.key;
+    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: prePrompt.key, promptPrefix: prePrompt.prompt}, cacheOptions);
+  }
+  else{
+    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: 'system'}, cacheOptions);
   }
 }
 
 async runChatGPT(opts) {
   if(opts.args.length === 1){
-    if(opts.prePrompt){
-    return await api.sendMessage(this.message, {systemMessage: opts.prePrompt})
-    }
-    return await api.sendMessage(this.message)
+    return await this.ChatGPTAPI.sendMessage(this.message)
   }
   else{
-    if(this.cache.getKey(`${this.senderid}`).prePrompt){
-      return await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`, systemMessage: this.cache.getKey(`${this.senderid}`).prePrompt})
-    }
-    else{
-      return await api.sendMessage(this.message, {parentMessageId: `${opts.args[1]}`})
-    }
+    console.log("other message")
+    return await this.ChatGPTAPI.sendMessage(this.message, {parentMessageId: `${opts.args[2]}`, conversationId: `${opts.args[1]}`})
   }
 }
 
 sendMessage(res) {
   bot.sendMessage(
     this.senderid,
-    res.text
+    res.response
   );
 }
 
@@ -182,21 +181,24 @@ saveCache(res) {
   if(this.gptOpts.prePrompt){
     this.cache.setKey(`${this.senderid}`, {
       id: this.senderid,
-      parentMessageId: res.id,
-      prePrompt: this.gptOpts.prePrompt
+      parentMessageId: res.messageId,
+      conversationId: res.conversationId,
+      prePrompt: {prompt: this.gptOpts.prePrompt, key: this.gptOpts.gptLabel}
     });
   }
   else if(this.cache.getKey(`${this.senderid}`).prePrompt){
     this.cache.setKey(`${this.senderid}`, {
       id: this.senderid,
-      parentMessageId: res.id,
+      parentMessageId: res.messageId,
+      conversationId: res.conversationId,
       prePrompt: this.cache.getKey(`${this.senderid}`).prePrompt
     });
   }
   else{
     this.cache.setKey(`${this.senderid}`, {
       id: this.senderid,
-      parentMessageId: res.id,
+      parentMessageId: res.messageId,
+      conversationId: res.conversationId,
     });
   }
   this.cache.save();

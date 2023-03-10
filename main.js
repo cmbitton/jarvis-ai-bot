@@ -139,6 +139,7 @@ checkForPrePrompt(){
   }
   return false
 }
+
 setGptOptions() {
   if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
     this.gptOpts = {args: [this.message]};

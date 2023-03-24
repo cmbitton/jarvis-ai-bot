@@ -2,7 +2,7 @@ import TelegramBot from "node-telegram-bot-api";
 import { PythonShell } from "python-shell";
 import flatCache from "flat-cache";
 import express from "express";
-import bodyParser from "body-Parser";
+import bodyParser from "body-parser";
 import * as dotenv from "dotenv";
 import { ChatGPTClient } from "@waylaidwanderer/chatgpt-api"
 import {prompts} from "./prompts.js";

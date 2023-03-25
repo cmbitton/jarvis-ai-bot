@@ -133,7 +133,7 @@ resetMessageCache() {
 checkForPrePrompt(){
   const prePrompts = Object.keys(prompts);
   for (const key of prePrompts){
-    if (this.message.startsWith(key)){
+    if (this.message.includes(key)){
       this.message.replace(key, "")
       return {key: key.slice(1), prompt: prompts[key]}
     }
@@ -141,21 +141,34 @@ checkForPrePrompt(){
   return false
 }
 
+setModel() {
+  if(this.message.toLowerCase().startsWith("/gpt4") || this.cache.getKey(`${this.senderid}`).model === "gpt-4"){
+    this.gptOpts["model"] = "gpt-4"
+    return {model: "gpt-4"}
+  }
+  else {
+    this.gptOpts["model"] = "gpt-3.5-turbo"
+    return {model: "gpt-3.5-turbo"}
+  }
+}
+
 setGptOptions() {
+  //set options for a new conversation
   if (Object.keys(this.cache.getKey(`${this.senderid}`)).length === 1) {
     this.gptOpts = {args: [this.message]};
-    //set options for continue conversation
+  //set options for continue conversation
   } else {
     this.gptOpts = {args: [this.message, `${this.cache.getKey(`${this.senderid}`).conversationId}`, `${this.cache.getKey(`${this.senderid}`).parentMessageId}`]};
   }
+  //checks for and sets ChatGPT preprompt
   const prePrompt = (this.checkForPrePrompt() || this.cache.getKey(`${this.senderid}`).prePrompt);
   if(prePrompt){
     this.gptOpts["prePrompt"] = prePrompt.prompt;
     this.gptOpts["gptLabel"] = prePrompt.key;
-    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: prePrompt.key, promptPrefix: prePrompt.prompt}, cacheOptions);
+    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: prePrompt.key, promptPrefix: prePrompt.prompt, modelOptions: this.setModel()}, cacheOptions);
   }
   else{
-    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: 'system'}, cacheOptions);
+    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: 'system', modelOptions: this.setModel()}, cacheOptions);
   }
 }
 
@@ -183,7 +196,8 @@ saveCache(res) {
       id: this.senderid,
       parentMessageId: res.messageId,
       conversationId: res.conversationId,
-      prePrompt: {prompt: this.gptOpts.prePrompt, key: this.gptOpts.gptLabel}
+      prePrompt: {prompt: this.gptOpts.prePrompt, key: this.gptOpts.gptLabel},
+      model: this.gptOpts.model
     });
   }
   else if(this.cache.getKey(`${this.senderid}`).prePrompt){
@@ -191,7 +205,8 @@ saveCache(res) {
       id: this.senderid,
       parentMessageId: res.messageId,
       conversationId: res.conversationId,
-      prePrompt: this.cache.getKey(`${this.senderid}`).prePrompt
+      prePrompt: this.cache.getKey(`${this.senderid}`).prePrompt,
+      model: this.gptOpts.model
     });
   }
   else{
@@ -199,6 +214,7 @@ saveCache(res) {
       id: this.senderid,
       parentMessageId: res.messageId,
       conversationId: res.conversationId,
+      model: this.gptOpts.model
     });
   }
   this.cache.save();

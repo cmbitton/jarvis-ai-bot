@@ -142,9 +142,25 @@ checkForPrePrompt(){
 }
 
 setModel() {
-  if(this.message.toLowerCase().startsWith("/gpt4") || this.cache.getKey(`${this.senderid}`).model === "gpt-4"){
-    this.gptOpts["model"] = "gpt-4"
-    return {model: "gpt-4"}
+  if(this.message.toLowerCase().startsWith("/gpt4") || this.message.toLowerCase().startsWith("/chatgpt")){
+    if(this.message.toLowerCase().startsWith("/gpt4")){
+      this.gptOpts["model"] = "gpt-4"
+      return {model: "gpt-4"}
+    }
+    else if(this.message.toLowerCase().startsWith("/chatgpt")){
+      this.gptOpts["model"] = "gpt-3.5-turbo"
+      return {model: "gpt-3.5-turbo"}
+    }
+  }
+  else if(this.cache.getKey(`${this.senderid}`).model === "gpt-4" || this.cache.getKey(`${this.senderid}`).model === "gpt-3.5-turbo"){
+    if(this.cache.getKey(`${this.senderid}`).model === "gpt-4"){
+      this.gptOpts["model"] = "gpt-4"
+      return {model: "gpt-4"}
+    }
+    else if(this.cache.getKey(`${this.senderid}`).model === "gpt-3.5-turbo"){
+      this.gptOpts["model"] = "gpt-3.5-turbo"
+      return {model: "gpt-3.5-turbo"}
+    }
   }
   else {
     this.gptOpts["model"] = "gpt-3.5-turbo"

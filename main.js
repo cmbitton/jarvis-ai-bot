@@ -58,6 +58,7 @@ bot.on("message", async (msg) => {
   }
   else {
     const ChatGPTClient = new ChatGPTOfficial(chatId, msg.text);
+    console.log(msg.text)
     await ChatGPTClient.runMainProgram();
   }
 });
@@ -111,7 +112,7 @@ async runMainProgram() {
   if (this.resetMessageCache()) return;
   this.setGptOptions();
   const message = await this.runChatGPT(this.gptOpts);
-  console.log(message)
+  console.log(message.details.choices)
   this.sendMessage(message);
   this.saveCache(message);
 }
@@ -184,7 +185,7 @@ setGptOptions() {
     this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: prePrompt.key, promptPrefix: prePrompt.prompt, modelOptions: this.setModel()}, cacheOptions);
   }
   else{
-    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {chatGptLabel: 'system', modelOptions: this.setModel()}, cacheOptions);
+    this.ChatGPTAPI = new ChatGPTClient(process.env.OPENAI_API_KEY, {modelOptions: this.setModel()}, cacheOptions);
   }
 }
 

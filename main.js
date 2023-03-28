@@ -135,7 +135,7 @@ checkForPrePrompt(){
   const prePrompts = Object.keys(prompts);
   for (const key of prePrompts){
     if (this.message.includes(key)){
-      this.message.replace(key, "")
+      this.message = this.message.replace(key, "")
       return {key: key.slice(1), prompt: prompts[key]}
     }
   }
@@ -145,10 +145,12 @@ checkForPrePrompt(){
 setModel() {
   if(this.message.toLowerCase().startsWith("/gpt4") || this.message.toLowerCase().startsWith("/chatgpt")){
     if(this.message.toLowerCase().startsWith("/gpt4")){
+      this.message = this.message.replace("/gpt4", "")
       this.gptOpts["model"] = "gpt-4"
       return {model: "gpt-4"}
     }
     else if(this.message.toLowerCase().startsWith("/chatgpt")){
+      this.message = this.message.replace("/chatgpt", "")
       this.gptOpts["model"] = "gpt-3.5-turbo"
       return {model: "gpt-3.5-turbo"}
     }
@@ -194,7 +196,6 @@ async runChatGPT(opts) {
     return await this.ChatGPTAPI.sendMessage(this.message)
   }
   else{
-    console.log("other message")
     return await this.ChatGPTAPI.sendMessage(this.message, {parentMessageId: `${opts.args[2]}`, conversationId: `${opts.args[1]}`})
   }
 }

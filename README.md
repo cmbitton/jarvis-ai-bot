@@ -5,8 +5,6 @@ Welcome to Jarvis, the ultimate AI personal assistant! Jarvis is a telegram bot 
 -ChatGPT<br>
 -Stable Diffusion 
 
-<b>Jarvis Telegram Username:</b> @officialjarvisbot
-
 -----------------------------------------
 
 ## <u>Stable Diffusion Instructions: </u>
